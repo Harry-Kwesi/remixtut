@@ -1,13 +1,60 @@
+import { useEffect } from "react";
 import {
   Form,
   Links,
   LiveReload,
   Meta,
+  NavLink,
+  Outlet,
   Scripts,
   ScrollRestoration,
+  useLoaderData,
+  useNavigation,
+  useSubmit,
 } from "@remix-run/react";
+import type { LinksFunction ,  LoaderFunctionArgs,} from "@remix-run/node";
+import appStylesHref from "./app.css";
+import { json, redirect } from "@remix-run/node";
+import { createEmptyContact, getContacts } from "./data";
+
+
+
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: appStylesHref },
+];
+
+export const loader = async ({
+  request,
+}: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const q = url.searchParams.get("q");
+  const contacts = await getContacts(q);
+  return json({ contacts, q });
+};
+
+export const action = async () => {
+  const contact = await createEmptyContact();
+  return redirect(`/contacts/${contact.id}/edit`);
+};
 
 export default function App() {
+  const { contacts, q } = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
+  const submit = useSubmit();
+
+  const searching =
+    navigation.location &&
+    new URLSearchParams(navigation.location.search).has(
+      "q"
+    );
+
+  useEffect(() => {
+    const searchField = document.getElementById("q");
+    if (searchField instanceof HTMLInputElement) {
+      searchField.value = q || "";
+    }
+  }, [q]);
+
   return (
     <html lang="en">
       <head>
@@ -18,34 +65,73 @@ export default function App() {
       </head>
       <body>
         <div id="sidebar">
-          <h1>Remix Contacts</h1>
-          <div>
-            <Form id="search-form" role="search">
+         <div 
+        className={
+            navigation.state === "loading" && !searching ? "loading" : ""
+          }
+          id="detail">
+          <Outlet />
+        </div> 
+        </div>
+        <div id="users">
+           <div style={{display: "flex", justifyContent: "flex-end", position : "fixed", top: '1.5rem', right: '3rem'}}>
+            <Form 
+               id="search-form" 
+               onChange={(event) => {
+               const isFirstSearch = q === null;
+               submit(event.currentTarget, {
+                  replace: !isFirstSearch,
+                });
+              }}
+               role="search">
               <input
+                className={searching ? "loading" : ""}
+                defaultValue={q || ""}
                 id="q"
                 aria-label="Search contacts"
                 placeholder="Search"
                 type="search"
                 name="q"
               />
-              <div id="search-spinner" aria-hidden hidden={true} />
+              <div id="search-spinner" aria-hidden hidden={!searching} />
             </Form>
             <Form method="post">
               <button type="submit">New</button>
             </Form>
-          </div>
+          </div> 
           <nav>
-            <ul>
-              <li>
-                <a href={`/contacts/1`}>Your Name</a>
-              </li>
-              <li>
-                <a href={`/contacts/2`}>Your Friend</a>
-              </li>
-            </ul>
-          </nav>
+        <ul>
+                {contacts.map((contact) => (
+                  <li key={contact.id}>
+                    <NavLink
+                  className={({ isActive, isPending }) =>
+                    isActive
+                      ? "active"
+                      : isPending
+                      ? "pending"
+                      : ""
+                  } to={`contacts/${contact.id}`}>
+                    <div><img id="useravatar" src={contact.avatar} alt="Contact Image" /></div>
+                    <div style={{marginRight: '10rem'}}>
+                      <div>{contact.first || contact.last ? (
+                        <>
+                          {contact.first} {contact.last}
+                        </>
+                      ) : (
+                        <i>No Name</i>
+                      )}{" "}
+                      </div>
+                      <div><p>{contact.notes}</p></div>
+                      </div>
+                      <div>{contact.favorite ? (
+                        <span>★</span>
+                      ) : null}</div>
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+              </nav>
         </div>
-
         <ScrollRestoration />
         <Scripts />
         <LiveReload />
